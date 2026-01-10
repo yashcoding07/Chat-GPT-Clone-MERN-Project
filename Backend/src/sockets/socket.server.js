@@ -9,6 +9,7 @@ const { createMemory, queryMemory } = require("../services/vector.service");
 function initSocketServer(httpServer) {
     const io = new Server(httpServer, {});
 
+    // socket.io middleware: which validates the user and attaches the user to the socket
     io.use(async (socket, next) => {
         const cookies = cookie.parse(socket.handshake.headers?.cookie || "");
 
@@ -26,24 +27,20 @@ function initSocketServer(httpServer) {
         };
     })
 
+    // socket.io connection handler: this establishes the connection between the client and the server
     io.on("connection", (socket) => {
 
         socket.on("ai-message", async (messagePayLoad) => {
 
-            const vectors = await aiService.generateVector(messagePayLoad.content);
-
-            const memory = await queryMemory({
-                queryVector: vectors,
-                limit: 3,
-                metadata: {}
-            });
-
-            const message = await messageModel.create({
-                chat: messagePayLoad.chat,
-                user: socket.user._id,
-                content: messagePayLoad.content,
-                role: "user"
-            });
+            const [message, vectors] = await Promise.all([
+                messageModel.create({
+                    chat: messagePayLoad.chat,
+                    user: socket.user._id,
+                    content: messagePayLoad.content,
+                    role: "user"
+                }),
+                aiService.generateVector(messagePayLoad.content),
+            ]);
 
             await createMemory({
                 messageId: message._id,
@@ -53,11 +50,20 @@ function initSocketServer(httpServer) {
                     userID: socket.user._id,
                     text: messagePayLoad.content
                 }
-            })
+            });
 
-            const chatHistory = (await messageModel.find({
-                chat: messagePayLoad.chat
-            }).sort({ createdAt: -1 }).limit(20).lean()).reverse();
+            const [memory, chatHistory] = await Promise.all([
+                queryMemory({
+                    queryVector: vectors,
+                    limit: 3,
+                    metadata: {
+                        user: socket.user._id
+                    }
+                }),
+                messageModel.find({
+                    chat: messagePayLoad.chat
+                }).sort({ createdAt: -1 }).limit(20).lean().then(messages => messages.reverse())
+            ]);
 
             const stm = chatHistory.map(item => {
                 return {
@@ -66,6 +72,7 @@ function initSocketServer(httpServer) {
                 }
             })
 
+            // this serves as the long term memory for the AI
             const ltm = [
                 {
                     role: "user",
@@ -77,18 +84,24 @@ function initSocketServer(httpServer) {
                 }
             ]
 
-            console.log([...ltm, ...stm]);
-
+            // this generates the response from the AI
             const response = await aiService.generateResponse([...ltm, ...stm]);
 
-            const responseVectors = await aiService.generateVector(response);
-
-            const responseMessage = await messageModel.create({
+            // this emits the response back to the client
+            socket.emit('ai-response', {
                 chat: messagePayLoad.chat,
-                user: socket.user._id,
-                content: response,
-                role: "model"
+                content: response
             });
+
+            const [responseVectors, responseMessage] = await Promise.all([
+                aiService.generateVector(response),
+                messageModel.create({
+                    chat: messagePayLoad.chat,
+                    user: socket.user._id,
+                    content: response,
+                    role: "model"
+                })
+            ]);
 
             await createMemory({
                 vectors: responseVectors,
@@ -99,12 +112,6 @@ function initSocketServer(httpServer) {
                     text: response
                 }
             });
-
-
-            socket.emit('ai-response', {
-                chat: messagePayLoad.chat,
-                content: response
-            })
         });
     });
 }
