@@ -7,7 +7,13 @@ const messageModel = require("../models/message.model");
 const { createMemory, queryMemory } = require("../services/vector.service");
 
 function initSocketServer(httpServer) {
-    const io = new Server(httpServer, {});
+    const io = new Server(httpServer, {
+        cors: {
+            origin: "http://localhost:5173",
+            allowedHeaders: ["Content-Type", "Authorization"],
+            credentials: true,
+        }
+    });
 
     // socket.io middleware: which validates the user and attaches the user to the socket
     io.use(async (socket, next) => {
@@ -29,6 +35,8 @@ function initSocketServer(httpServer) {
 
     // socket.io connection handler: this establishes the connection between the client and the server
     io.on("connection", (socket) => {
+
+        console.log("User connected", socket.user._id);
 
         socket.on("ai-message", async (messagePayLoad) => {
 
