@@ -35,7 +35,7 @@ const Register = () => {
     .then((res) => {
       console.log(res);
       userRegistered();
-      navigate("/login");
+      navigate("/Home");
     })
     .catch((err) => {
       console.log(err);

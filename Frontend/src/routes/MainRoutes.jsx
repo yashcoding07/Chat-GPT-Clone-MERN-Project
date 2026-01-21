@@ -6,8 +6,8 @@ import Register from "../pages/Register";
 const MainRoutes = () => {
   return (
     <Routes>
-        <Route path="/" element={<Home />} />
-        <Route path="/login" element={<Login />} />    
+        <Route path="/" element={<Login />} />
+        <Route path="/Home" element={<Home />} />    
         <Route path="/register" element={<Register />} />    
     </Routes>
   )

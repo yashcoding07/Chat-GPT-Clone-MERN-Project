@@ -26,10 +26,19 @@ const Login = () => {
     .then((res)=>{
       console.log(res);
       userLoggedIn();
-      navigate("/");
+      navigate("/Home");
     })
     .catch((err)=>{
-      console.log(err);
+      toast("Register First", {
+        position: "top-center",
+        autoClose: 5000,
+        hideProgressBar: false,
+        closeOnClick: true,
+        pauseOnHover: true,
+        draggable: true,
+        progress: undefined,
+        theme: "dark",
+      });
     })
   };
 
